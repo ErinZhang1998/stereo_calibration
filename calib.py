@@ -5,6 +5,8 @@ import sys
 from scipy import linalg
 import yaml
 import os
+from perception import CameraIntrinsics
+from autolab_core import RigidTransform
 
 #This will contain the calibration settings from the calibration_settings.yaml file
 calibration_settings = {}
@@ -285,15 +287,22 @@ def save_frames_two_cams(camera0_name, camera1_name):
 
 
 #open paired calibration frames and stereo calibrate for cam0 to cam1 coorindate transformations
-def stereo_calibrate(mtx0, dist0, mtx1, dist1, frames_prefix_c0, frames_prefix_c1):
-    #read the synched frames
-    c0_images_names = sorted(glob.glob(frames_prefix_c0))
-    c1_images_names = sorted(glob.glob(frames_prefix_c1))
+def stereo_calibrate(mtx0, dist0, mtx1, dist1, cam0_dir, cam1_dir):
+    # #read the synched frames
+    # c0_images_names = sorted(glob.glob(frames_prefix_c0))
+    # c1_images_names = sorted(glob.glob(frames_prefix_c1))
+    c0_image_files = sorted(glob.glob(cam0_dir+ "/*.jpg"))
+    c1_image_files = []
+    for c0_file in c0_image_files:
+        suffix = os.path.basename(c0_file)
+        c1_file = os.path.join(cam1_dir, suffix)
+        c1_image_files.append(c1_file)
 
     #open images
-    c0_images = [cv.imread(imname, 1) for imname in c0_images_names]
-    c1_images = [cv.imread(imname, 1) for imname in c1_images_names]
-
+    #TODO Read from synchronized pairs of images 
+    c0_images = [cv.imread(imname, 1) for imname in c0_image_files]
+    c1_images = [cv.imread(imname, 1) for imname in c1_image_files]
+    
     #change this if stereo calibration not good.
     criteria = (cv.TERM_CRITERIA_EPS + cv.TERM_CRITERIA_MAX_ITER, 100, 0.001)
 
@@ -306,6 +315,7 @@ def stereo_calibrate(mtx0, dist0, mtx1, dist1, frames_prefix_c0, frames_prefix_c
     objp = np.zeros((rows*columns,3), np.float32)
     objp[:,:2] = np.mgrid[0:rows,0:columns].T.reshape(-1,2)
     objp = world_scaling* objp
+    print(objp)
 
     #frame dimensions. Frames should be the same size.
     width = c0_images[0].shape[1]
@@ -323,7 +333,7 @@ def stereo_calibrate(mtx0, dist0, mtx1, dist1, frames_prefix_c0, frames_prefix_c
         gray2 = cv.cvtColor(frame1, cv.COLOR_BGR2GRAY)
         c_ret1, corners1 = cv.findChessboardCorners(gray1, (rows, columns), None)
         c_ret2, corners2 = cv.findChessboardCorners(gray2, (rows, columns), None)
-
+        
         if c_ret1 == True and c_ret2 == True:
 
             corners1 = cv.cornerSubPix(gray1, corners1, (11, 11), (-1, -1), criteria)
@@ -371,7 +381,7 @@ def get_projection_matrix(cmtx, R, T):
     return P
 
 # After calibrating, we can see shifted coordinate axes in the video feeds directly
-def check_calibration(camera0_name, camera0_data, camera1_name, camera1_data, _zshift = 50.):
+def check_calibration(camera0_name, camera0_data, camera1_name, camera1_data, cam0_dir, cam1_dir, _zshift = 50.):
     
     cmtx0 = np.array(camera0_data[0])
     dist0 = np.array(camera0_data[1])
@@ -392,7 +402,7 @@ def check_calibration(camera0_name, camera0_data, camera1_name, camera1_data, _z
                                   [0.,0.,1.]])
     z_shift = np.array([0.,0.,_zshift]).reshape((1, 3))
     #increase the size of the coorindate axes and shift in the z direction
-    draw_axes_points = 5 * coordinate_points + z_shift
+    draw_axes_points = 0.05 * coordinate_points + z_shift
 
     #project 3D points to each camera view manually. This can also be done using cv.projectPoints()
     #Note that this uses homogenous coordinate formulation
@@ -415,26 +425,38 @@ def check_calibration(camera0_name, camera0_data, camera1_name, camera1_data, _z
     pixel_points_camera0 = np.array(pixel_points_camera0)
     pixel_points_camera1 = np.array(pixel_points_camera1)
 
-    #open the video streams
-    cap0 = cv.VideoCapture(calibration_settings[camera0_name])
-    cap1 = cv.VideoCapture(calibration_settings[camera1_name])
+    # #open the video streams
+    # cap0 = cv.VideoCapture(calibration_settings[camera0_name])
+    # cap1 = cv.VideoCapture(calibration_settings[camera1_name])
 
     #set camera resolutions
     width = calibration_settings['frame_width']
     height = calibration_settings['frame_height']
-    cap0.set(3, width)
-    cap0.set(4, height)
-    cap1.set(3, width)
-    cap1.set(4, height)
+    # cap0.set(3, width)
+    # cap0.set(4, height)
+    # cap1.set(3, width)
+    # cap1.set(4, height)
 
-    while True:
+    c0_image_files = sorted(glob.glob(cam0_dir+ "/*.jpg"))
+    c1_image_files = []
+    for c0_file in c0_image_files:
+        suffix = os.path.basename(c0_file)
+        c1_file = os.path.join(cam1_dir, suffix)
+        c1_image_files.append(c1_file)
 
-        ret0, frame0 = cap0.read()
-        ret1, frame1 = cap1.read()
+    #open images
+    #TODO Read from synchronized pairs of images 
+    c0_images = [cv.imread(imname, 1) for imname in c0_image_files]
+    c1_images = [cv.imread(imname, 1) for imname in c1_image_files]
+    
+    for frame0, frame1 in zip(c0_images, c1_images):
+        
+        # ret0, frame0 = cap0.read()
+        # ret1, frame1 = cap1.read()
 
-        if not ret0 or not ret1:
-            print('Video stream not returning frame data')
-            quit()
+        # if not ret0 or not ret1:
+        #     print('Video stream not returning frame data')
+        #     quit()
 
         #follow RGB colors to indicate XYZ axes respectively
         colors = [(0,0,255), (0,255,0), (255,0,0)]
@@ -449,11 +471,11 @@ def check_calibration(camera0_name, camera0_data, camera1_name, camera1_data, _z
         for col, _p in zip(colors, pixel_points_camera1[1:]):
             _p = tuple(_p.astype(np.int32))
             cv.line(frame1, origin, _p, col, 2)
-
+        # import pdb;pdb.set_trace()
         cv.imshow('frame0', frame0)
         cv.imshow('frame1', frame1)
 
-        k = cv.waitKey(1)
+        k = cv.waitKey(0)
         if k == 27: break
 
     cv.destroyAllWindows()
@@ -493,7 +515,7 @@ def get_cam1_to_world_transforms(cmtx0, dist0, R_W0, T_W0,
     frame0 = cv.imread(image_path0, 1)
     frame1 = cv.imread(image_path1, 1)
 
-    unitv_points = 5 * np.array([[0,0,0], [1,0,0], [0,1,0], [0,0,1]], dtype = 'float32').reshape((4,1,3))
+    unitv_points = 0.06 * np.array([[0,0,0], [1,0,0], [0,1,0], [0,0,1]], dtype = 'float32').reshape((4,1,3))
     #axes colors are RGB format to indicate XYZ axes.
     colors = [(0,0,255), (0,255,0), (255,0,0)]
 
@@ -524,10 +546,19 @@ def get_cam1_to_world_transforms(cmtx0, dist0, R_W0, T_W0,
 
 def save_extrinsic_calibration_parameters(R0, T0, R1, T1, prefix = ''):
     
+    
+    T_camera1_camera0 = RigidTransform(rotation=np.asarray(R1),
+                             translation=np.asarray(T1).reshape(-1,), 
+                             from_frame=calibration_settings['camera1_name'], to_frame=calibration_settings['camera0_name'])
+    print(T_camera1_camera0)
+    T_camera1_camera0.save(calibration_settings['transform_save_path'])
+
+    return
+
     #create folder if it does not exist
     if not os.path.exists('camera_parameters'):
         os.mkdir('camera_parameters')
-
+    
     camera0_rot_trans_filename = os.path.join('camera_parameters', prefix + 'camera0_rot_trans.dat')
     outf = open(camera0_rot_trans_filename, 'w')
 
@@ -573,30 +604,34 @@ if __name__ == '__main__':
     parse_calibration_settings_file(sys.argv[1])
 
 
-    """Step1. Save calibration frames for single cameras"""
-    save_frames_single_camera('camera0') #save frames for camera0
-    save_frames_single_camera('camera1') #save frames for camera1
+    # """Step1. Save calibration frames for single cameras"""
+    # save_frames_single_camera('camera0') #save frames for camera0
+    # save_frames_single_camera('camera1') #save frames for camera1
 
 
-    """Step2. Obtain camera intrinsic matrices and save them"""
-    #camera0 intrinsics
-    images_prefix = os.path.join('frames', 'camera0*')
-    cmtx0, dist0 = calibrate_camera_for_intrinsic_parameters(images_prefix) 
-    save_camera_intrinsics(cmtx0, dist0, 'camera0') #this will write cmtx and dist to disk
-    #camera1 intrinsics
-    images_prefix = os.path.join('frames', 'camera1*')
-    cmtx1, dist1 = calibrate_camera_for_intrinsic_parameters(images_prefix)
-    save_camera_intrinsics(cmtx1, dist1, 'camera1') #this will write cmtx and dist to disk
+    # """Step2. Obtain camera intrinsic matrices and save them"""
+    # #camera0 intrinsics
+    # images_prefix = os.path.join('frames', 'camera0*')
+    # cmtx0, dist0 = calibrate_camera_for_intrinsic_parameters(images_prefix) 
+    # save_camera_intrinsics(cmtx0, dist0, 'camera0') #this will write cmtx and dist to disk
+    # #camera1 intrinsics
+    # images_prefix = os.path.join('frames', 'camera1*')
+    # cmtx1, dist1 = calibrate_camera_for_intrinsic_parameters(images_prefix)
+    # save_camera_intrinsics(cmtx1, dist1, 'camera1') #this will write cmtx and dist to disk
 
 
-    """Step3. Save calibration frames for both cameras simultaneously"""
-    save_frames_two_cams('camera0', 'camera1') #save simultaneous frames
+    # """Step3. Save calibration frames for both cameras simultaneously"""
+    # save_frames_two_cams('camera0', 'camera1') #save simultaneous frames
 
 
     """Step4. Use paired calibration pattern frames to obtain camera0 to camera1 rotation and translation"""
-    frames_prefix_c0 = os.path.join('frames_pair', 'camera0*')
-    frames_prefix_c1 = os.path.join('frames_pair', 'camera1*')
-    R, T = stereo_calibrate(cmtx0, dist0, cmtx1, dist1, frames_prefix_c0, frames_prefix_c1)
+    cmtx0 = CameraIntrinsics.load(calibration_settings['camera0_intrinsics']).K
+    dist0 = np.load(calibration_settings['camera0_dist'])
+    cmtx1 = CameraIntrinsics.load(calibration_settings['camera1_intrinsics']).K
+    dist1 = np.load(calibration_settings['camera1_dist'])
+    # frames_prefix_c0 = os.path.join('frames_pair', 'camera0*')
+    # frames_prefix_c1 = os.path.join('frames_pair', 'camera1*')
+    R, T = stereo_calibrate(cmtx0, dist0, cmtx1, dist1, calibration_settings['camera0_dir'], calibration_settings['camera1_dir'])
 
 
     """Step5. Save calibration data where camera0 defines the world space origin."""
@@ -609,17 +644,29 @@ if __name__ == '__main__':
     #check your calibration makes sense
     camera0_data = [cmtx0, dist0, R0, T0]
     camera1_data = [cmtx1, dist1, R1, T1]
-    check_calibration('camera0', camera0_data, 'camera1', camera1_data, _zshift = 60.)
+    # check_calibration('camera0', camera0_data, 'camera1', camera1_data, calibration_settings['camera0_dir'], calibration_settings['camera1_dir'], _zshift = 0.6)
 
 
     """Optional. Define a different origin point and save the calibration data"""
     # #get the world to camera0 rotation and translation
-    # R_W0, T_W0 = get_world_space_origin(cmtx0, dist0, os.path.join('frames_pair', 'camera0_4.png'))
+    
+    c0_image_files = sorted(glob.glob(calibration_settings['camera0_dir']+ "/*.jpg"))
+    c1_image_files = []
+    for c0_file in c0_image_files:
+        suffix = os.path.basename(c0_file)
+        c1_file = os.path.join(calibration_settings['camera1_dir'], suffix)
+        c1_image_files.append(c1_file)
+
+
+    
+    R_W0, T_W0 = get_world_space_origin(cmtx0, dist0, c0_image_files[-1])
+    print(R_W0)
+    print("\n", T_W0)
     # #get rotation and translation from world directly to camera1
-    # R_W1, T_W1 = get_cam1_to_world_transforms(cmtx0, dist0, R_W0, T_W0,
-    #                                           cmtx1, dist1, R1, T1,
-    #                                           os.path.join('frames_pair', 'camera0_4.png'),
-    #                                           os.path.join('frames_pair', 'camera1_4.png'),)
+    R_W1, T_W1 = get_cam1_to_world_transforms(cmtx0, dist0, R_W0, T_W0,
+                                              cmtx1, dist1, R1, T1,
+                                              c0_image_files[-1],
+                                              c1_image_files[-1],)
 
     # #save rotation and translation parameters to disk
     # save_extrinsic_calibration_parameters(R_W0, T_W0, R_W1, T_W1, prefix = 'world_to_') #this will write R and T to disk

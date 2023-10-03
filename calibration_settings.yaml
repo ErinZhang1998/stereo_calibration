@@ -1,11 +1,20 @@
 camera0: 4
+camera1_name : front_right
+camera1_intrinsics: /scratch0/zhang401local/kinect2_014513751447.intr
+camera1_dist: /scratch0/zhang401local/kinect2_014513751447_dist.npy
+camera1_dir: /scratch0/zhang401local/azure_kinect_leaf_stereo/color0_2
 camera1: 6
-frame_width: 1280
-frame_height: 720
+camera0_name : front_left
+camera0_intrinsics: /scratch0/zhang401local/kinect2_174329235047.intr
+camera0_dist: /scratch0/zhang401local/kinect2_174329235047_dist.npy
+camera0_dir: /scratch0/zhang401local/azure_kinect_leaf_stereo/color1_2
+transform_save_path: /scratch0/zhang401local/FL_to_FR.tf
+frame_width: 1920
+frame_height: 1080
 mono_calibration_frames: 10
 stereo_calibration_frames: 10
 view_resize: 1
-checkerboard_box_size_scale : 3.19
-checkerboard_rows: 4
+checkerboard_box_size_scale : 0.03
+checkerboard_rows: 5
 checkerboard_columns: 7
 cooldown: 100
