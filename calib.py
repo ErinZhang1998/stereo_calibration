@@ -291,7 +291,7 @@ def stereo_calibrate(mtx0, dist0, mtx1, dist1, cam0_dir, cam1_dir):
     # #read the synched frames
     # c0_images_names = sorted(glob.glob(frames_prefix_c0))
     # c1_images_names = sorted(glob.glob(frames_prefix_c1))
-    c0_image_files = sorted(glob.glob(cam0_dir+ "/*.jpg"))
+    c0_image_files = sorted(glob.glob(cam0_dir+ "/*.jpg"))#[-10:-5]
     c1_image_files = []
     for c0_file in c0_image_files:
         suffix = os.path.basename(c0_file)
@@ -304,7 +304,7 @@ def stereo_calibrate(mtx0, dist0, mtx1, dist1, cam0_dir, cam1_dir):
     c1_images = [cv.imread(imname, 1) for imname in c1_image_files]
     
     #change this if stereo calibration not good.
-    criteria = (cv.TERM_CRITERIA_EPS + cv.TERM_CRITERIA_MAX_ITER, 100, 0.001)
+    criteria = (cv.TERM_CRITERIA_EPS + cv.TERM_CRITERIA_MAX_ITER, 100000, 0.000001)
 
     #calibration pattern settings
     rows = calibration_settings['checkerboard_rows']
@@ -359,7 +359,7 @@ def stereo_calibrate(mtx0, dist0, mtx1, dist1, cam0_dir, cam1_dir):
             imgpoints_left.append(corners1)
             imgpoints_right.append(corners2)
 
-    stereocalibration_flags = cv.CALIB_FIX_INTRINSIC
+    stereocalibration_flags = cv.CALIB_RATIONAL_MODEL#cv.CALIB_FIX_INTRINSIC
     ret, CM1, dist0, CM2, dist1, R, T, E, F = cv.stereoCalibrate(objpoints, imgpoints_left, imgpoints_right, mtx0, dist0,
                                                                  mtx1, dist1, (width, height), criteria = criteria, flags = stereocalibration_flags)
 
@@ -500,7 +500,7 @@ def get_world_space_origin(cmtx, dist, img_path):
     cv.drawChessboardCorners(frame, (rows,columns), corners, ret)
     cv.putText(frame, "If you don't see detected points, try with a different image", (50,50), cv.FONT_HERSHEY_COMPLEX, 1, (0,0,255), 1)
     cv.imshow('img', frame)
-    cv.waitKey(0)
+    cv.waitKey(1)
 
     ret, rvec, tvec = cv.solvePnP(objp, corners, cmtx, dist)
     R, _  = cv.Rodrigues(rvec) #rvec is Rotation matrix in Rodrigues vector form
@@ -526,6 +526,15 @@ def get_cam1_to_world_transforms(cmtx0, dist0, R_W0, T_W0,
     for col, _p in zip(colors, points[1:]):
         _p = tuple(_p.astype(np.int32))
         cv.line(frame0, origin, _p, col, 2)
+    
+    for x_idx in range(5):
+        for y_idx in range(7):
+            points, _ = cv.projectPoints(0.03*np.asarray([[x_idx, y_idx, 0]], dtype = 'float32').reshape((1,1,3)), R_W0, T_W0, cmtx0, dist0)
+            points = points.reshape((1,2)).astype(np.int32)
+            x,y = points[0]
+ 
+            
+            cv.circle(frame0, (x,y), radius=2, color=(0, 0, 255), thickness=1)
 
     #project origin points to frame1
     R_W1 = R_01 @ R_W0
@@ -537,9 +546,19 @@ def get_cam1_to_world_transforms(cmtx0, dist0, R_W0, T_W0,
         _p = tuple(_p.astype(np.int32))
         cv.line(frame1, origin, _p, col, 2)
 
+    for x_idx in range(5):
+        for y_idx in range(7):
+            points, _ = cv.projectPoints(0.03*np.asarray([[x_idx, y_idx, 0]], dtype = 'float32').reshape((1,1,3)), R_W1, T_W1, cmtx1, dist1)
+            points = points.reshape((1,2)).astype(np.int32)
+            x,y = points[0]
+ 
+            
+            cv.circle(frame1, (x,y), radius=2, color=(0, 0, 255), thickness=1)
+
     cv.imshow('frame0', frame0)
     cv.imshow('frame1', frame1)
     cv.waitKey(0)
+
 
     return R_W1, T_W1
 
@@ -549,8 +568,8 @@ def save_extrinsic_calibration_parameters(R0, T0, R1, T1, prefix = ''):
     
     T_camera1_camera0 = RigidTransform(rotation=np.asarray(R1),
                              translation=np.asarray(T1).reshape(-1,), 
-                             from_frame=calibration_settings['camera1_name'], to_frame=calibration_settings['camera0_name'])
-    print(T_camera1_camera0)
+                             from_frame=calibration_settings['camera0_name'], to_frame=calibration_settings['camera1_name'])
+    print("Save to : ", calibration_settings['transform_save_path'], "\n", T_camera1_camera0)
     T_camera1_camera0.save(calibration_settings['transform_save_path'])
 
     return
@@ -658,15 +677,15 @@ if __name__ == '__main__':
         c1_image_files.append(c1_file)
 
 
-    
-    R_W0, T_W0 = get_world_space_origin(cmtx0, dist0, c0_image_files[-1])
-    print(R_W0)
-    print("\n", T_W0)
-    # #get rotation and translation from world directly to camera1
-    R_W1, T_W1 = get_cam1_to_world_transforms(cmtx0, dist0, R_W0, T_W0,
-                                              cmtx1, dist1, R1, T1,
-                                              c0_image_files[-1],
-                                              c1_image_files[-1],)
+    for img_to_try in range(len(c0_image_files)):
+        R_W0, T_W0 = get_world_space_origin(cmtx0, dist0, c0_image_files[img_to_try])
+        # print(R_W0)
+        # print("\n", T_W0)
+        # #get rotation and translation from world directly to camera1
+        R_W1, T_W1 = get_cam1_to_world_transforms(cmtx0, dist0, R_W0, T_W0,
+                                                cmtx1, dist1, R1, T1,
+                                                c0_image_files[img_to_try],
+                                                c1_image_files[img_to_try],)
 
     # #save rotation and translation parameters to disk
     # save_extrinsic_calibration_parameters(R_W0, T_W0, R_W1, T_W1, prefix = 'world_to_') #this will write R and T to disk
