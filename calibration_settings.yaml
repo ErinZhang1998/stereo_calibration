@@ -1,13 +1,13 @@
 camera0: 4
 camera0_name : ez
-camera0_intrinsics: /scratch0/zhang401local/ez.intr
-camera0_dist: /scratch0/zhang401local/ez_dist.npy
-camera0_dir: /scratch0/zhang401local/mc_ez_azure_kinect_leaf_stereo/color1
+camera0_intrinsics: /scratch0/zhang401local/ez_2160P.intr
+camera0_dist: /scratch0/zhang401local/ez_dist_2160P.npy
+camera0_dir: /scratch0/zhang401local/mc_ez_azure_kinect_leaf_stereo_2160P/color1
 camera1: 6
 camera1_name : mc
-camera1_intrinsics: /scratch0/zhang401local/mc.intr
-camera1_dist: /scratch0/zhang401local/mc_dist.npy
-camera1_dir: /scratch0/zhang401local/mc_ez_azure_kinect_leaf_stereo/color0
+camera1_intrinsics: /scratch0/zhang401local/mc_2160P.intr
+camera1_dist: /scratch0/zhang401local/mc_dist_2160P.npy
+camera1_dir: /scratch0/zhang401local/mc_ez_azure_kinect_leaf_stereo_2160P/color0
 transform_save_path: /scratch0/zhang401local/ez_on_FL_to_mc_on_FR_2.tf
 frame_width: 1920
 frame_height: 1080

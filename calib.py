@@ -291,7 +291,7 @@ def stereo_calibrate(mtx0, dist0, mtx1, dist1, cam0_dir, cam1_dir):
     # #read the synched frames
     # c0_images_names = sorted(glob.glob(frames_prefix_c0))
     # c1_images_names = sorted(glob.glob(frames_prefix_c1))
-    c0_image_files = sorted(glob.glob(cam0_dir+ "/*.jpg"))#[-10:-5]
+    c0_image_files = sorted(glob.glob(cam0_dir+ "/*.jpg"))
     c1_image_files = []
     for c0_file in c0_image_files:
         suffix = os.path.basename(c0_file)
@@ -328,6 +328,7 @@ def stereo_calibrate(mtx0, dist0, mtx1, dist1, cam0_dir, cam1_dir):
     #coordinates of the checkerboard in checkerboard world space.
     objpoints = [] # 3d point in real world space
 
+    
     for frame0, frame1 in zip(c0_images, c1_images):
         gray1 = cv.cvtColor(frame0, cv.COLOR_BGR2GRAY)
         gray2 = cv.cvtColor(frame1, cv.COLOR_BGR2GRAY)
@@ -342,10 +343,12 @@ def stereo_calibrate(mtx0, dist0, mtx1, dist1, cam0_dir, cam1_dir):
             p0_c1 = corners1[0,0].astype(np.int32)
             p0_c2 = corners2[0,0].astype(np.int32)
 
+            cv.namedWindow("img", cv.WINDOW_NORMAL)
             cv.putText(frame0, 'O', (p0_c1[0], p0_c1[1]), cv.FONT_HERSHEY_COMPLEX, 1, (0,0,255), 1)
             cv.drawChessboardCorners(frame0, (rows,columns), corners1, c_ret1)
             cv.imshow('img', frame0)
 
+            cv.namedWindow("img2", cv.WINDOW_NORMAL)
             cv.putText(frame1, 'O', (p0_c2[0], p0_c2[1]), cv.FONT_HERSHEY_COMPLEX, 1, (0,0,255), 1)
             cv.drawChessboardCorners(frame1, (rows,columns), corners2, c_ret2)
             cv.imshow('img2', frame1)
@@ -361,7 +364,7 @@ def stereo_calibrate(mtx0, dist0, mtx1, dist1, cam0_dir, cam1_dir):
 
     stereocalibration_flags = cv.CALIB_RATIONAL_MODEL#cv.CALIB_FIX_INTRINSIC
     ret, CM1, dist0, CM2, dist1, R, T, E, F = cv.stereoCalibrate(objpoints, imgpoints_left, imgpoints_right, mtx0, dist0,
-                                                                 mtx1, dist1, (width, height), criteria = criteria, flags = stereocalibration_flags)
+                                                                 mtx1, dist1, (width, height), criteria = criteria, flags = cv.CALIB_FIX_INTRINSIC)
 
     print('rmse: ', ret)
     cv.destroyAllWindows()
@@ -499,6 +502,7 @@ def get_world_space_origin(cmtx, dist, img_path):
 
     cv.drawChessboardCorners(frame, (rows,columns), corners, ret)
     cv.putText(frame, "If you don't see detected points, try with a different image", (50,50), cv.FONT_HERSHEY_COMPLEX, 1, (0,0,255), 1)
+    cv.namedWindow("img", cv.WINDOW_NORMAL)
     cv.imshow('img', frame)
     cv.waitKey(1)
 
@@ -554,8 +558,9 @@ def get_cam1_to_world_transforms(cmtx0, dist0, R_W0, T_W0,
  
             
             cv.circle(frame1, (x,y), radius=2, color=(0, 0, 255), thickness=1)
-
+    cv.namedWindow("frame0", cv.WINDOW_NORMAL)
     cv.imshow('frame0', frame0)
+    cv.namedWindow("frame1", cv.WINDOW_NORMAL)
     cv.imshow('frame1', frame1)
     cv.waitKey(0)
 
