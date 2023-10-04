@@ -362,13 +362,21 @@ def stereo_calibrate(mtx0, dist0, mtx1, dist1, cam0_dir, cam1_dir):
             imgpoints_left.append(corners1)
             imgpoints_right.append(corners2)
 
-    stereocalibration_flags = cv.CALIB_RATIONAL_MODEL#cv.CALIB_FIX_INTRINSIC
+    stereocalibration_flags = cv.CALIB_RATIONAL_MODEL
+    # cv.CALIB_USE_INTRINSIC_GUESS + cv.CALIB_RATIONAL_MODEL
+    # cv.CALIB_FIX_PRINCIPAL_POINT + cv.CALIB_FIX_FOCAL_LENGTH + cv.CALIB_RATIONAL_MODEL
+    # cv.CALIB_RATIONAL_MODEL
+    # cv.CALIB_FIX_INTRINSIC
     ret, CM1, dist0, CM2, dist1, R, T, E, F = cv.stereoCalibrate(objpoints, imgpoints_left, imgpoints_right, mtx0, dist0,
-                                                                 mtx1, dist1, (width, height), criteria = criteria, flags = cv.CALIB_FIX_INTRINSIC)
+                                                                 mtx1, dist1, (width, height), criteria = criteria, flags = stereocalibration_flags)
 
     print('rmse: ', ret)
+    print(CM1)
+    print(dist0)
+    print(CM2)
+    print(dist1)
     cv.destroyAllWindows()
-    return R, T
+    return CM1, dist0, CM2, dist1, R, T
 
 #Converts Rotation matrix R and Translation vector T into a homogeneous representation matrix
 def _make_homogeneous_rep_matrix(R, t):
@@ -618,6 +626,10 @@ def save_extrinsic_calibration_parameters(R0, T0, R1, T1, prefix = ''):
 
     return R0, T0, R1, T1
 
+def generate_new_path(old_path):
+    name, suffix = os.path.basename(old_path).split(".")
+    return os.path.join(os.path.abspath(os.path.join(old_path, os.pardir)), name+"_optimize"+"."+suffix)
+
 if __name__ == '__main__':
 
     if len(sys.argv) != 2:
@@ -649,13 +661,27 @@ if __name__ == '__main__':
 
 
     """Step4. Use paired calibration pattern frames to obtain camera0 to camera1 rotation and translation"""
-    cmtx0 = CameraIntrinsics.load(calibration_settings['camera0_intrinsics']).K
+    cmtx0_obj = CameraIntrinsics.load(calibration_settings['camera0_intrinsics'])
+    cmtx0 = cmtx0_obj.K
     dist0 = np.load(calibration_settings['camera0_dist'])
-    cmtx1 = CameraIntrinsics.load(calibration_settings['camera1_intrinsics']).K
+    cmtx1_obj = CameraIntrinsics.load(calibration_settings['camera1_intrinsics'])
+    cmtx1 = cmtx1_obj.K
     dist1 = np.load(calibration_settings['camera1_dist'])
     # frames_prefix_c0 = os.path.join('frames_pair', 'camera0*')
     # frames_prefix_c1 = os.path.join('frames_pair', 'camera1*')
-    R, T = stereo_calibrate(cmtx0, dist0, cmtx1, dist1, calibration_settings['camera0_dir'], calibration_settings['camera1_dir'])
+    CM0_new, dist0_new, CM1_new, dist1_new, R, T = stereo_calibrate(cmtx0, dist0, cmtx1, dist1, calibration_settings['camera0_dir'], calibration_settings['camera1_dir'])
+
+    """Step4-2. Saving the new intrinsics matrix and distortion coefficients"""
+    CM0_new_intr = CameraIntrinsics('azure_kinect_overhead', CM0_new[0][0], CM0_new[1][1], CM0_new[0][2], CM0_new[1][2], 0.0, cmtx0_obj.height, cmtx0_obj.width)
+    intr_file_name0 = generate_new_path(calibration_settings['camera0_intrinsics'])
+    CM0_new_intr.save(intr_file_name0)
+    CM1_new_intr = CameraIntrinsics('azure_kinect_overhead', CM1_new[0][0], CM1_new[1][1], CM1_new[0][2], CM1_new[1][2], 0.0, cmtx1_obj.height, cmtx1_obj.width)
+    intr_file_name1 = generate_new_path(calibration_settings['camera1_intrinsics'])
+    CM1_new_intr.save(intr_file_name1)
+    dist_file_name0 = generate_new_path(calibration_settings['camera0_dist'])
+    np.save(dist_file_name0, dist0_new[:,:calibration_settings['num_dist_coeff']])
+    dist_file_name1 = generate_new_path(calibration_settings['camera1_dist'])
+    np.save(dist_file_name1, dist1_new[:,:calibration_settings['num_dist_coeff']])
 
 
     """Step5. Save calibration data where camera0 defines the world space origin."""
