@@ -304,7 +304,7 @@ def stereo_calibrate(mtx0, dist0, mtx1, dist1, cam0_dir, cam1_dir):
     c1_images = [cv.imread(imname, 1) for imname in c1_image_files]
     
     #change this if stereo calibration not good.
-    criteria = (cv.TERM_CRITERIA_EPS + cv.TERM_CRITERIA_MAX_ITER, 100000, 0.000001)
+    criteria = (cv.TERM_CRITERIA_EPS + cv.TERM_CRITERIA_MAX_ITER, 10000, 0.0001)
 
     #calibration pattern settings
     rows = calibration_settings['checkerboard_rows']
@@ -362,11 +362,12 @@ def stereo_calibrate(mtx0, dist0, mtx1, dist1, cam0_dir, cam1_dir):
             imgpoints_left.append(corners1)
             imgpoints_right.append(corners2)
 
-    stereocalibration_flags = cv.CALIB_RATIONAL_MODEL
+    stereocalibration_flags = cv.CALIB_FIX_INTRINSIC #+ cv.CALIB_RATIONAL_MODEL
     # cv.CALIB_USE_INTRINSIC_GUESS + cv.CALIB_RATIONAL_MODEL
     # cv.CALIB_FIX_PRINCIPAL_POINT + cv.CALIB_FIX_FOCAL_LENGTH + cv.CALIB_RATIONAL_MODEL
     # cv.CALIB_RATIONAL_MODEL
     # cv.CALIB_FIX_INTRINSIC
+    dist0 = dist1 = np.zeros((1, calibration_settings['num_dist_coeff'])).astype(dist0.dtype)
     ret, CM1, dist0, CM2, dist1, R, T, E, F = cv.stereoCalibrate(objpoints, imgpoints_left, imgpoints_right, mtx0, dist0,
                                                                  mtx1, dist1, (width, height), criteria = criteria, flags = stereocalibration_flags)
 

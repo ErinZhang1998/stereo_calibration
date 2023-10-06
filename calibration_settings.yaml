@@ -1,14 +1,14 @@
 camera0: 4
-camera0_name : ez
-camera0_intrinsics: /scratch0/zhang401local/ez.intr
-camera0_dist: /scratch0/zhang401local/ez_dist.npy
-camera0_dir: /scratch0/zhang401local/mc_ez_azure_kinect_leaf_stereo/color1
+camera1_name : front_right
+camera1_intrinsics: /scratch0/zhang401local/kinect2_014513751447.intr
+camera1_dist: /scratch0/zhang401local/kinect2_014513751447_dist.npy
+camera1_dir: /scratch0/zhang401local/azure_kinect_leaf_stereo/color0
 camera1: 6
-camera1_name : mc
-camera1_intrinsics: /scratch0/zhang401local/mc.intr
-camera1_dist: /scratch0/zhang401local/mc_dist.npy
-camera1_dir: /scratch0/zhang401local/mc_ez_azure_kinect_leaf_stereo/color0
-transform_save_path: /scratch0/zhang401local/ez_on_FL_to_mc_on_FR_2.tf
+camera0_name : front_left
+camera0_intrinsics: /scratch0/zhang401local/kinect2_174329235047.intr
+camera0_dist: /scratch0/zhang401local/kinect2_174329235047_dist.npy
+camera0_dir: /scratch0/zhang401local/azure_kinect_leaf_stereo/color1
+transform_save_path: /scratch0/zhang401local/FL_to_FR.tf
 frame_width: 1920
 frame_height: 1080
 mono_calibration_frames: 10
@@ -18,4 +18,4 @@ checkerboard_box_size_scale : 0.03
 checkerboard_rows: 5
 checkerboard_columns: 7
 cooldown: 100
-num_dist_coeff : 8
+num_dist_coeff : 5
