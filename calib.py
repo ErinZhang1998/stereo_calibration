@@ -293,7 +293,7 @@ def stereo_calibrate(mtx0, dist0, mtx1, dist1, cam0_dir, cam1_dir):
     # #read the synched frames
     # c0_images_names = sorted(glob.glob(frames_prefix_c0))
     # c1_images_names = sorted(glob.glob(frames_prefix_c1))
-    c0_image_files = sorted(glob.glob(cam0_dir+ "/*.jpg"))
+    c0_image_files = sorted(glob.glob(cam0_dir+ "/*.jpg"))[:1]
     c1_image_files = []
     for c0_file in c0_image_files:
         suffix = os.path.basename(c0_file)
@@ -504,8 +504,7 @@ def create_pcl(color_path, depth_path, intrinsic_iam):
     rgbd_image = o3d.geometry.RGBDImage.create_from_color_and_depth(color_o3d, depth_o3d, convert_rgb_to_intensity=False)
 
     pcd = o3d.geometry.PointCloud.create_from_rgbd_image(rgbd_image, intrinsic_o3d)
-    import pdb;pdb.set_trace()
-
+    
     return pcd
 
 def get_point_coordinate(object_image_center_x, object_image_center_y, depth_image, intrinsics):    
@@ -688,6 +687,73 @@ def generate_new_path(old_path):
     name, suffix = os.path.basename(old_path).split(".")
     return os.path.join(os.path.abspath(os.path.join(old_path, os.pardir)), name+"_optimize"+"."+suffix)
 
+def align_from_rgb():
+    """Step4. Use paired calibration pattern frames to obtain camera0 to camera1 rotation and translation"""
+    cmtx0_obj = CameraIntrinsics.load(calibration_settings['camera0_intrinsics'])
+    cmtx0 = cmtx0_obj.K
+    dist0 = np.load(calibration_settings['camera0_dist'])
+    cmtx1_obj = CameraIntrinsics.load(calibration_settings['camera1_intrinsics'])
+    cmtx1 = cmtx1_obj.K
+    dist1 = np.load(calibration_settings['camera1_dist'])
+    # frames_prefix_c0 = os.path.join('frames_pair', 'camera0*')
+    # frames_prefix_c1 = os.path.join('frames_pair', 'camera1*')
+    CM0_new, dist0_new, CM1_new, dist1_new, R, T = stereo_calibrate(cmtx0, dist0, cmtx1, dist1, calibration_settings['camera0_dir'], calibration_settings['camera1_dir'])
+
+    # """Step4-2. Saving the new intrinsics matrix and distortion coefficients"""
+    # CM0_new_intr = CameraIntrinsics('azure_kinect_overhead', CM0_new[0][0], CM0_new[1][1], CM0_new[0][2], CM0_new[1][2], 0.0, cmtx0_obj.height, cmtx0_obj.width)
+    # intr_file_name0 = generate_new_path(calibration_settings['camera0_intrinsics'])
+    # CM0_new_intr.save(intr_file_name0)
+    # CM1_new_intr = CameraIntrinsics('azure_kinect_overhead', CM1_new[0][0], CM1_new[1][1], CM1_new[0][2], CM1_new[1][2], 0.0, cmtx1_obj.height, cmtx1_obj.width)
+    # intr_file_name1 = generate_new_path(calibration_settings['camera1_intrinsics'])
+    # CM1_new_intr.save(intr_file_name1)
+    # dist_file_name0 = generate_new_path(calibration_settings['camera0_dist'])
+    # np.save(dist_file_name0, dist0_new[:,:calibration_settings['num_dist_coeff']])
+    # dist_file_name1 = generate_new_path(calibration_settings['camera1_dist'])
+    # np.save(dist_file_name1, dist1_new[:,:calibration_settings['num_dist_coeff']])
+
+    # """Step5. Save calibration data where camera0 defines the world space origin."""
+    # #camera0 rotation and translation is identity matrix and zeros vector
+    # R0 = np.eye(3, dtype=np.float32)
+    # T0 = np.array([0., 0., 0.]).reshape((3, 1))
+
+    # # save_extrinsic_calibration_parameters(R0, T0, R, T) #this will write R and T to disk
+    # R1 = R; T1 = T #to avoid confusion, camera1 R and T are labeled R1 and T1
+    # #check your calibration makes sense
+    # camera0_data = [cmtx0, dist0, R0, T0]
+    # camera1_data = [cmtx1, dist1, R1, T1]
+    # # check_calibration('camera0', camera0_data, 'camera1', camera1_data, calibration_settings['camera0_dir'], calibration_settings['camera1_dir'], _zshift = 0.6)
+
+    c0_image_files = sorted(glob.glob(calibration_settings['camera0_dir']+ "/*.jpg"))
+    if os.path.exists(calibration_settings['camera0_depth_dir']):
+        c0_depth_files = sorted(glob.glob(calibration_settings['camera0_depth_dir']+"/*.png"))
+    c1_image_files = []
+    for c0_file in c0_image_files:
+        suffix = os.path.basename(c0_file)
+        c1_file = os.path.join(calibration_settings['camera1_dir'], suffix)
+        c1_image_files.append(c1_file)
+    if os.path.exists(calibration_settings['camera1_depth_dir']):
+        c1_depth_files = []
+        for c0_file in c0_depth_files:
+            suffix = os.path.basename(c0_file)
+            c1_file = os.path.join(calibration_settings['camera1_depth_dir'], suffix)
+            c1_depth_files.append(c1_file)
+    
+    if os.path.exists(calibration_settings['camera1_depth_dir']) and os.path.exists(calibration_settings['camera0_depth_dir']):
+        opt_idx = 0
+        print(c0_image_files[opt_idx])
+
+        cam0_pt_cloud = create_pcl(c0_image_files[opt_idx], c0_depth_files[opt_idx], cmtx0_obj)
+        cam1_pt_cloud = create_pcl(c1_image_files[opt_idx], c1_depth_files[opt_idx], cmtx1_obj)
+        o3d.visualization.draw_geometries([cam0_pt_cloud])
+        trans_init = np.zeros((4,4))
+        trans_init[:-1,:] = T
+        trans_init[:3,:3] = R
+        trans_init[-1,-1] = 1.0
+        print(trans_init)
+        cam0_pt_cloud.transform(trans_init)
+        o3d.visualization.draw_geometries([cam0_pt_cloud, cam1_pt_cloud])
+
+
 if __name__ == '__main__':
 
     if len(sys.argv) != 2:
@@ -717,43 +783,9 @@ if __name__ == '__main__':
     # """Step3. Save calibration frames for both cameras simultaneously"""
     # save_frames_two_cams('camera0', 'camera1') #save simultaneous frames
 
-
-    # """Step4. Use paired calibration pattern frames to obtain camera0 to camera1 rotation and translation"""
-    # cmtx0_obj = CameraIntrinsics.load(calibration_settings['camera0_intrinsics'])
-    # cmtx0 = cmtx0_obj.K
-    # dist0 = np.load(calibration_settings['camera0_dist'])
-    # cmtx1_obj = CameraIntrinsics.load(calibration_settings['camera1_intrinsics'])
-    # cmtx1 = cmtx1_obj.K
-    # dist1 = np.load(calibration_settings['camera1_dist'])
-    # # frames_prefix_c0 = os.path.join('frames_pair', 'camera0*')
-    # # frames_prefix_c1 = os.path.join('frames_pair', 'camera1*')
-    # CM0_new, dist0_new, CM1_new, dist1_new, R, T = stereo_calibrate(cmtx0, dist0, cmtx1, dist1, calibration_settings['camera0_dir'], calibration_settings['camera1_dir'])
-
-    # """Step4-2. Saving the new intrinsics matrix and distortion coefficients"""
-    # CM0_new_intr = CameraIntrinsics('azure_kinect_overhead', CM0_new[0][0], CM0_new[1][1], CM0_new[0][2], CM0_new[1][2], 0.0, cmtx0_obj.height, cmtx0_obj.width)
-    # intr_file_name0 = generate_new_path(calibration_settings['camera0_intrinsics'])
-    # CM0_new_intr.save(intr_file_name0)
-    # CM1_new_intr = CameraIntrinsics('azure_kinect_overhead', CM1_new[0][0], CM1_new[1][1], CM1_new[0][2], CM1_new[1][2], 0.0, cmtx1_obj.height, cmtx1_obj.width)
-    # intr_file_name1 = generate_new_path(calibration_settings['camera1_intrinsics'])
-    # CM1_new_intr.save(intr_file_name1)
-    # dist_file_name0 = generate_new_path(calibration_settings['camera0_dist'])
-    # np.save(dist_file_name0, dist0_new[:,:calibration_settings['num_dist_coeff']])
-    # dist_file_name1 = generate_new_path(calibration_settings['camera1_dist'])
-    # np.save(dist_file_name1, dist1_new[:,:calibration_settings['num_dist_coeff']])
-
-
-    # """Step5. Save calibration data where camera0 defines the world space origin."""
-    # #camera0 rotation and translation is identity matrix and zeros vector
-    # R0 = np.eye(3, dtype=np.float32)
-    # T0 = np.array([0., 0., 0.]).reshape((3, 1))
-
-    # save_extrinsic_calibration_parameters(R0, T0, R, T) #this will write R and T to disk
-    # R1 = R; T1 = T #to avoid confusion, camera1 R and T are labeled R1 and T1
-    # #check your calibration makes sense
-    # camera0_data = [cmtx0, dist0, R0, T0]
-    # camera1_data = [cmtx1, dist1, R1, T1]
-    # # check_calibration('camera0', camera0_data, 'camera1', camera1_data, calibration_settings['camera0_dir'], calibration_settings['camera1_dir'], _zshift = 0.6)
-
+    # align_from_rgb()
+    # exit(0)
+    
 
     """Optional. Define a different origin point and save the calibration data"""
     # # #get the world to camera0 rotation and translation

@@ -10,7 +10,7 @@ camera0_intrinsics: /scratch0/zhang401local/kinect2_174329235047.intr
 camera0_dist: /scratch0/zhang401local/kinect2_174329235047_dist.npy
 camera0_dir: /scratch0/zhang401local/kinect_v2_stereo_7x9_FL_FR/color1
 camera0_depth_dir : /scratch0/zhang401local/kinect_v2_stereo_7x9_FL_FR/depth1
-transform_save_path: /scratch0/zhang401local/FL_to_FR_7x9_10101121.tf
+transform_save_path: /scratch0/zhang401local/FL_to_FR_7x9_10101502.tf
 frame_width: 1920
 frame_height: 1080
 mono_calibration_frames: 10
