@@ -6,7 +6,9 @@ from scipy import linalg
 import yaml
 import os
 from perception import CameraIntrinsics
-from autolab_core import RigidTransform
+from autolab_core import RigidTransform, Point
+import open3d as o3d
+import copy
 
 #This will contain the calibration settings from the calibration_settings.yaml file
 calibration_settings = {}
@@ -492,6 +494,63 @@ def check_calibration(camera0_name, camera0_data, camera1_name, camera1_data, ca
 
     cv.destroyAllWindows()
 
+def create_pcl(color_path, depth_path, intrinsic_iam):    
+    intrinsic_o3d = o3d.camera.PinholeCameraIntrinsic(intrinsic_iam.width, intrinsic_iam.height, intrinsic_iam.fx, intrinsic_iam.fy, intrinsic_iam.cx, intrinsic_iam.cy)
+    rgb = cv.imread(color_path)
+    rgb = cv.cvtColor(rgb, cv.COLOR_BGR2RGB)
+    depth = cv.imread(depth_path, cv.IMREAD_ANYDEPTH)
+    color_o3d = o3d.geometry.Image(rgb)
+    depth_o3d = o3d.geometry.Image(depth)
+    rgbd_image = o3d.geometry.RGBDImage.create_from_color_and_depth(color_o3d, depth_o3d, convert_rgb_to_intensity=False)
+
+    pcd = o3d.geometry.PointCloud.create_from_rgbd_image(rgbd_image, intrinsic_o3d)
+    import pdb;pdb.set_trace()
+
+    return pcd
+
+def get_point_coordinate(object_image_center_x, object_image_center_y, depth_image, intrinsics):    
+    
+    object_center = Point(np.array([object_image_center_x, object_image_center_y]), 'azure_kinect_overhead')
+    object_depth = depth_image[object_image_center_y, object_image_center_x] * 0.001
+    invalid = np.isclose(depth_image[object_image_center_y, object_image_center_x], 0.0, rtol=0.0, atol=1e-04)
+    object_center_point = intrinsics.deproject_pixel(object_depth, object_center)    
+    
+    return invalid, object_center_point.data 
+
+def get_chessboard_in_cam_frame(cmtx_obj, img_path, depth_path):
+    frame = cv.imread(img_path, 1)
+    depth = cv.imread(depth_path, cv.IMREAD_ANYDEPTH)
+    
+    gray = cv.cvtColor(frame, cv.COLOR_BGR2GRAY)
+    ret, corners = cv.findChessboardCorners(gray, (calibration_settings['checkerboard_rows'], calibration_settings['checkerboard_columns']), None)
+
+    depth_to_draw = copy.deepcopy(depth)
+    cv.drawChessboardCorners(depth_to_draw, (calibration_settings['checkerboard_rows'], calibration_settings['checkerboard_columns']), corners, ret)
+    # cv.putText(depth, "If you don't see detected points, try with a different image", (50,50), cv.FONT_HERSHEY_COMPLEX, 1, (0,0,255), 1)
+    # cv.namedWindow("img_depth", cv.WINDOW_NORMAL)
+    # cv.imshow('img_depth', depth)
+    # cv.waitKey(0)
+    import matplotlib.pyplot as plt
+    fig,ax = plt.subplots(1,1)
+    ax.imshow(depth_to_draw)
+    ax.scatter(corners[:,0,0], corners[:,0,1])
+    plt.show()
+
+
+    corners_coord = []
+    coord_valid = np.ones(len(corners)).astype(bool)
+    for corner_idx in range(len(corners)):
+        object_image_center_x, object_image_center_y = corners[corner_idx][0].astype(int)
+        invalid, coord = get_point_coordinate(object_image_center_x, object_image_center_y, depth, cmtx_obj)
+        if invalid:
+            print(corner_idx)
+        coord_valid[corner_idx] = not invalid
+        corners_coord.append(coord)
+    corners_coord = np.asarray(corners_coord)
+    coord_valid = np.asarray(coord_valid)
+    
+    return coord_valid, corners_coord
+
 def get_world_space_origin(cmtx, dist, img_path):
 
     frame = cv.imread(img_path, 1)
@@ -508,13 +567,11 @@ def get_world_space_origin(cmtx, dist, img_path):
 
     gray = cv.cvtColor(frame, cv.COLOR_BGR2GRAY)
     ret, corners = cv.findChessboardCorners(gray, (rows, columns), None)
-
     cv.drawChessboardCorners(frame, (rows,columns), corners, ret)
     cv.putText(frame, "If you don't see detected points, try with a different image", (50,50), cv.FONT_HERSHEY_COMPLEX, 1, (0,0,255), 1)
     cv.namedWindow("img", cv.WINDOW_NORMAL)
     cv.imshow('img', frame)
     cv.waitKey(1)
-
     ret, rvec, tvec = cv.solvePnP(objp, corners, cmtx, dist)
     R, _  = cv.Rodrigues(rvec) #rvec is Rotation matrix in Rodrigues vector form
 
@@ -540,9 +597,9 @@ def get_cam1_to_world_transforms(cmtx0, dist0, R_W0, T_W0,
         _p = tuple(_p.astype(np.int32))
         cv.line(frame0, origin, _p, col, 2)
     
-    for x_idx in range(5):
-        for y_idx in range(7):
-            points, _ = cv.projectPoints(0.03*np.asarray([[x_idx, y_idx, 0]], dtype = 'float32').reshape((1,1,3)), R_W0, T_W0, cmtx0, dist0)
+    for x_idx in range(calibration_settings['checkerboard_rows']):
+        for y_idx in range(calibration_settings['checkerboard_columns']):
+            points, _ = cv.projectPoints(calibration_settings['checkerboard_box_size_scale']*np.asarray([[x_idx, y_idx, 0]], dtype = 'float32').reshape((1,1,3)), R_W0, T_W0, cmtx0, dist0)
             points = points.reshape((1,2)).astype(np.int32)
             x,y = points[0]
  
@@ -559,9 +616,9 @@ def get_cam1_to_world_transforms(cmtx0, dist0, R_W0, T_W0,
         _p = tuple(_p.astype(np.int32))
         cv.line(frame1, origin, _p, col, 2)
 
-    for x_idx in range(5):
-        for y_idx in range(7):
-            points, _ = cv.projectPoints(0.03*np.asarray([[x_idx, y_idx, 0]], dtype = 'float32').reshape((1,1,3)), R_W1, T_W1, cmtx1, dist1)
+    for x_idx in range(calibration_settings['checkerboard_rows']):
+        for y_idx in range(calibration_settings['checkerboard_columns']):
+            points, _ = cv.projectPoints(calibration_settings['checkerboard_box_size_scale']*np.asarray([[x_idx, y_idx, 0]], dtype = 'float32').reshape((1,1,3)), R_W1, T_W1, cmtx1, dist1)
             points = points.reshape((1,2)).astype(np.int32)
             x,y = points[0]
  
@@ -661,64 +718,116 @@ if __name__ == '__main__':
     # save_frames_two_cams('camera0', 'camera1') #save simultaneous frames
 
 
-    """Step4. Use paired calibration pattern frames to obtain camera0 to camera1 rotation and translation"""
+    # """Step4. Use paired calibration pattern frames to obtain camera0 to camera1 rotation and translation"""
+    # cmtx0_obj = CameraIntrinsics.load(calibration_settings['camera0_intrinsics'])
+    # cmtx0 = cmtx0_obj.K
+    # dist0 = np.load(calibration_settings['camera0_dist'])
+    # cmtx1_obj = CameraIntrinsics.load(calibration_settings['camera1_intrinsics'])
+    # cmtx1 = cmtx1_obj.K
+    # dist1 = np.load(calibration_settings['camera1_dist'])
+    # # frames_prefix_c0 = os.path.join('frames_pair', 'camera0*')
+    # # frames_prefix_c1 = os.path.join('frames_pair', 'camera1*')
+    # CM0_new, dist0_new, CM1_new, dist1_new, R, T = stereo_calibrate(cmtx0, dist0, cmtx1, dist1, calibration_settings['camera0_dir'], calibration_settings['camera1_dir'])
+
+    # """Step4-2. Saving the new intrinsics matrix and distortion coefficients"""
+    # CM0_new_intr = CameraIntrinsics('azure_kinect_overhead', CM0_new[0][0], CM0_new[1][1], CM0_new[0][2], CM0_new[1][2], 0.0, cmtx0_obj.height, cmtx0_obj.width)
+    # intr_file_name0 = generate_new_path(calibration_settings['camera0_intrinsics'])
+    # CM0_new_intr.save(intr_file_name0)
+    # CM1_new_intr = CameraIntrinsics('azure_kinect_overhead', CM1_new[0][0], CM1_new[1][1], CM1_new[0][2], CM1_new[1][2], 0.0, cmtx1_obj.height, cmtx1_obj.width)
+    # intr_file_name1 = generate_new_path(calibration_settings['camera1_intrinsics'])
+    # CM1_new_intr.save(intr_file_name1)
+    # dist_file_name0 = generate_new_path(calibration_settings['camera0_dist'])
+    # np.save(dist_file_name0, dist0_new[:,:calibration_settings['num_dist_coeff']])
+    # dist_file_name1 = generate_new_path(calibration_settings['camera1_dist'])
+    # np.save(dist_file_name1, dist1_new[:,:calibration_settings['num_dist_coeff']])
+
+
+    # """Step5. Save calibration data where camera0 defines the world space origin."""
+    # #camera0 rotation and translation is identity matrix and zeros vector
+    # R0 = np.eye(3, dtype=np.float32)
+    # T0 = np.array([0., 0., 0.]).reshape((3, 1))
+
+    # save_extrinsic_calibration_parameters(R0, T0, R, T) #this will write R and T to disk
+    # R1 = R; T1 = T #to avoid confusion, camera1 R and T are labeled R1 and T1
+    # #check your calibration makes sense
+    # camera0_data = [cmtx0, dist0, R0, T0]
+    # camera1_data = [cmtx1, dist1, R1, T1]
+    # # check_calibration('camera0', camera0_data, 'camera1', camera1_data, calibration_settings['camera0_dir'], calibration_settings['camera1_dir'], _zshift = 0.6)
+
+
+    """Optional. Define a different origin point and save the calibration data"""
+    # # #get the world to camera0 rotation and translation
+    
     cmtx0_obj = CameraIntrinsics.load(calibration_settings['camera0_intrinsics'])
     cmtx0 = cmtx0_obj.K
     dist0 = np.load(calibration_settings['camera0_dist'])
     cmtx1_obj = CameraIntrinsics.load(calibration_settings['camera1_intrinsics'])
     cmtx1 = cmtx1_obj.K
     dist1 = np.load(calibration_settings['camera1_dist'])
-    # frames_prefix_c0 = os.path.join('frames_pair', 'camera0*')
-    # frames_prefix_c1 = os.path.join('frames_pair', 'camera1*')
-    CM0_new, dist0_new, CM1_new, dist1_new, R, T = stereo_calibrate(cmtx0, dist0, cmtx1, dist1, calibration_settings['camera0_dir'], calibration_settings['camera1_dir'])
-
-    """Step4-2. Saving the new intrinsics matrix and distortion coefficients"""
-    CM0_new_intr = CameraIntrinsics('azure_kinect_overhead', CM0_new[0][0], CM0_new[1][1], CM0_new[0][2], CM0_new[1][2], 0.0, cmtx0_obj.height, cmtx0_obj.width)
-    intr_file_name0 = generate_new_path(calibration_settings['camera0_intrinsics'])
-    CM0_new_intr.save(intr_file_name0)
-    CM1_new_intr = CameraIntrinsics('azure_kinect_overhead', CM1_new[0][0], CM1_new[1][1], CM1_new[0][2], CM1_new[1][2], 0.0, cmtx1_obj.height, cmtx1_obj.width)
-    intr_file_name1 = generate_new_path(calibration_settings['camera1_intrinsics'])
-    CM1_new_intr.save(intr_file_name1)
-    dist_file_name0 = generate_new_path(calibration_settings['camera0_dist'])
-    np.save(dist_file_name0, dist0_new[:,:calibration_settings['num_dist_coeff']])
-    dist_file_name1 = generate_new_path(calibration_settings['camera1_dist'])
-    np.save(dist_file_name1, dist1_new[:,:calibration_settings['num_dist_coeff']])
-
-
-    """Step5. Save calibration data where camera0 defines the world space origin."""
-    #camera0 rotation and translation is identity matrix and zeros vector
-    R0 = np.eye(3, dtype=np.float32)
-    T0 = np.array([0., 0., 0.]).reshape((3, 1))
-
-    save_extrinsic_calibration_parameters(R0, T0, R, T) #this will write R and T to disk
-    R1 = R; T1 = T #to avoid confusion, camera1 R and T are labeled R1 and T1
-    #check your calibration makes sense
-    camera0_data = [cmtx0, dist0, R0, T0]
-    camera1_data = [cmtx1, dist1, R1, T1]
-    # check_calibration('camera0', camera0_data, 'camera1', camera1_data, calibration_settings['camera0_dir'], calibration_settings['camera1_dir'], _zshift = 0.6)
-
-
-    """Optional. Define a different origin point and save the calibration data"""
-    # #get the world to camera0 rotation and translation
     
     c0_image_files = sorted(glob.glob(calibration_settings['camera0_dir']+ "/*.jpg"))
+    if os.path.exists(calibration_settings['camera0_depth_dir']):
+        c0_depth_files = sorted(glob.glob(calibration_settings['camera0_depth_dir']+"/*.png"))
     c1_image_files = []
     for c0_file in c0_image_files:
         suffix = os.path.basename(c0_file)
         c1_file = os.path.join(calibration_settings['camera1_dir'], suffix)
         c1_image_files.append(c1_file)
+    if os.path.exists(calibration_settings['camera1_depth_dir']):
+        c1_depth_files = []
+        for c0_file in c0_depth_files:
+            suffix = os.path.basename(c0_file)
+            c1_file = os.path.join(calibration_settings['camera1_depth_dir'], suffix)
+            c1_depth_files.append(c1_file)
+    
+    if os.path.exists(calibration_settings['camera1_depth_dir']) and os.path.exists(calibration_settings['camera0_depth_dir']):
+        opt_idx = 0
+        print(c0_image_files[opt_idx])
+        pts0_valid,c0_chessboard_pts = get_chessboard_in_cam_frame(cmtx0_obj, c0_image_files[opt_idx], c0_depth_files[opt_idx])
+        pts1_valid,c1_chessboard_pts = get_chessboard_in_cam_frame(cmtx1_obj, c1_image_files[opt_idx], c1_depth_files[opt_idx])
+        
+        all_valid = np.logical_and(pts0_valid, pts1_valid)
+        c0_chessboard_pts_valid = c0_chessboard_pts[all_valid]
+        c1_chessboard_pts_valid = c1_chessboard_pts[all_valid]
+        
+        pcd0 = o3d.geometry.PointCloud()
+        pcd0.points = o3d.utility.Vector3dVector(c0_chessboard_pts_valid)
+
+        pcd1 = o3d.geometry.PointCloud()
+        pcd1.points = o3d.utility.Vector3dVector(c1_chessboard_pts_valid)
+
+        # 
+        corr = np.stack([np.arange(np.sum(all_valid)),np.arange(np.sum(all_valid)) ]).T.astype(int)
+        p2p = o3d.pipelines.registration.TransformationEstimationPointToPoint()
+        trans_init = p2p.compute_transformation(pcd0, pcd1, o3d.utility.Vector2iVector(corr))
+
+        cam0_pt_cloud = create_pcl(c0_image_files[opt_idx], c0_depth_files[opt_idx], cmtx0_obj)
+        cam1_pt_cloud = create_pcl(c1_image_files[opt_idx], c1_depth_files[opt_idx], cmtx1_obj)
+        cam0_pt_cloud.transform(trans_init)
+        o3d.visualization.draw_geometries([cam0_pt_cloud, cam1_pt_cloud])
+
+        T1 = trans_init[:-1,-1]
+        R1 = trans_init[:3,:3]
+        
+        T_camera0_camera1 = RigidTransform(rotation=np.asarray(R1),
+                             translation=np.asarray(T1).reshape(-1,), 
+                             from_frame=calibration_settings['camera0_name'], to_frame=calibration_settings['camera1_name'])
+        print("Save to : ", calibration_settings['transform_save_path'], "\n", T_camera0_camera1)
+        T_camera0_camera1.save(calibration_settings['transform_save_path'])
 
 
-    for img_to_try in range(len(c0_image_files)):
-        R_W0, T_W0 = get_world_space_origin(cmtx0, dist0, c0_image_files[img_to_try])
-        # print(R_W0)
-        # print("\n", T_W0)
-        # #get rotation and translation from world directly to camera1
-        R_W1, T_W1 = get_cam1_to_world_transforms(cmtx0, dist0, R_W0, T_W0,
-                                                cmtx1, dist1, R1, T1,
-                                                c0_image_files[img_to_try],
-                                                c1_image_files[img_to_try],)
 
-    # #save rotation and translation parameters to disk
-    # save_extrinsic_calibration_parameters(R_W0, T_W0, R_W1, T_W1, prefix = 'world_to_') #this will write R and T to disk
+
+    # for img_to_try in range(len(c0_image_files)):
+    #     R_W0, T_W0 = get_world_space_origin(cmtx0, dist0, c0_image_files[img_to_try])
+    #     # print(R_W0)
+    #     # print("\n", T_W0)
+    #     # #get rotation and translation from world directly to camera1
+    #     R_W1, T_W1 = get_cam1_to_world_transforms(cmtx0, dist0, R_W0, T_W0,
+    #                                             cmtx1, dist1, R1, T1,
+    #                                             c0_image_files[img_to_try],
+    #                                             c1_image_files[img_to_try],)
+
+    # # #save rotation and translation parameters to disk
+    # # save_extrinsic_calibration_parameters(R_W0, T_W0, R_W1, T_W1, prefix = 'world_to_') #this will write R and T to disk
 
