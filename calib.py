@@ -836,7 +836,10 @@ if __name__ == '__main__':
         cam0_pt_cloud = create_pcl(c0_image_files[opt_idx], c0_depth_files[opt_idx], cmtx0_obj)
         cam1_pt_cloud = create_pcl(c1_image_files[opt_idx], c1_depth_files[opt_idx], cmtx1_obj)
         cam0_pt_cloud.transform(trans_init)
-        o3d.visualization.draw_geometries([cam0_pt_cloud, cam1_pt_cloud])
+        pcd_combined = o3d.geometry.PointCloud()
+        pcd_combined += cam0_pt_cloud
+        pcd_combined += cam1_pt_cloud
+        o3d.visualization.draw_geometries_with_editing([pcd_combined])
 
         T1 = trans_init[:-1,-1]
         R1 = trans_init[:3,:3]

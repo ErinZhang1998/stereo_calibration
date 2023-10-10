@@ -2,22 +2,22 @@ camera0: 4
 camera1_name : front_right
 camera1_intrinsics: /scratch0/zhang401local/kinect2_014513751447.intr
 camera1_dist: /scratch0/zhang401local/kinect2_014513751447_dist.npy
-camera1_dir: /scratch0/zhang401local/kinect_v2_stereo_7x9_FL_FR/color0
-camera1_depth_dir : /scratch0/zhang401local/kinect_v2_stereo_7x9_FL_FR/depth0
+camera1_dir: /scratch0/zhang401local/kinect_v2_stereo_5x7_FL_FR/color0
+camera1_depth_dir : /scratch0/zhang401local/kinect_v2_stereo_5x7_FL_FR/depth0
 camera1: 6
 camera0_name : front_left
 camera0_intrinsics: /scratch0/zhang401local/kinect2_174329235047.intr
 camera0_dist: /scratch0/zhang401local/kinect2_174329235047_dist.npy
-camera0_dir: /scratch0/zhang401local/kinect_v2_stereo_7x9_FL_FR/color1
-camera0_depth_dir : /scratch0/zhang401local/kinect_v2_stereo_7x9_FL_FR/depth1
+camera0_dir: /scratch0/zhang401local/kinect_v2_stereo_5x7_FL_FR/color1
+camera0_depth_dir : /scratch0/zhang401local/kinect_v2_stereo_5x7_FL_FR/depth1
 transform_save_path: /scratch0/zhang401local/FL_to_FR_7x9_10101502.tf
 frame_width: 1920
 frame_height: 1080
 mono_calibration_frames: 10
 stereo_calibration_frames: 10
 view_resize: 1
-checkerboard_box_size_scale : 0.025
-checkerboard_rows: 7
-checkerboard_columns: 9
+checkerboard_box_size_scale : 0.03
+checkerboard_rows: 5
+checkerboard_columns: 7
 cooldown: 100
 num_dist_coeff : 5
