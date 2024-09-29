@@ -783,8 +783,8 @@ if __name__ == '__main__':
     # """Step3. Save calibration frames for both cameras simultaneously"""
     # save_frames_two_cams('camera0', 'camera1') #save simultaneous frames
 
-    # align_from_rgb()
-    # exit(0)
+    align_from_rgb()
+    exit(0)
     
 
     """Optional. Define a different origin point and save the calibration data"""
